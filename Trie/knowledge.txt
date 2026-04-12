@@ -1,0 +1,120 @@
+TRIE (PREFIX TREE)
+==================
+
+What is a Trie?
+---------------
+A Trie (pronounced "try", from re-TRIE-val) is a tree-based data structure used
+to store strings where each node represents a single character. Unlike a binary
+search tree that stores entire keys at nodes, a Trie encodes keys character by
+character along a path from the root to a terminal node.
+
+The key property: all strings sharing a common prefix share the same path from
+the root. This makes prefix-based operations — lookup, insertion, autocomplete,
+prefix search — extremely efficient compared to hash maps or sorted arrays.
+
+Space complexity depends on the alphabet size and number of shared prefixes.
+In the best case (many shared prefixes), a Trie is far more compact than storing
+strings individually. Each node typically stores an array or map of child pointers
+and a boolean marking whether it is the end of a valid word.
+
+
+How It Works
+------------
+Given the words: "car", "card", "care", "cat", "bat"
+
+  Insert each word character by character:
+
+          [root]
+          /    \
+        [c]    [b]
+         |      |
+        [a]    [a]
+        / \     |
+      [r] [t*] [t*]
+      / \
+   [d*] [e*]
+
+  * = end of word marker
+
+  Each path root → marked node spells out a complete word:
+    root → c → a → t*        = "cat"
+    root → c → a → r → d*    = "card"
+    root → c → a → r → e*    = "care"
+    root → b → a → t*        = "bat"
+
+  Prefix search for "car":
+    Walk root → c → a → r in O(|prefix|) time.
+    Every subtree below that node is a valid completion: "car", "card", "care".
+
+Complexity (where L = length of the string, N = number of strings):
+  - Insert:       O(L)
+  - Search:       O(L)
+  - Prefix query: O(L + results)
+  - Space:        O(N * L) worst case (no shared prefixes), much better with overlap
+
+
+Real-World Use Cases
+--------------------
+
+1. Search Engine Autocomplete
+   When you type "prog" into Google and see "programming", "program", "progress"
+   as suggestions, a Trie (or compressed variant) is used to look up all strings
+   with that prefix in milliseconds. The alternative — scanning every indexed
+   query string — would be orders of magnitude slower at Google's scale.
+
+2. IDE and Code Editor Autocompletion
+   VS Code, IntelliJ, and most editors store identifiers (variable names, function
+   names, keywords) in a Trie so that as you type, completions appear instantly.
+   A prefix walk on the Trie returns every symbol starting with the typed characters
+   in O(prefix_length + results) time, enabling real-time suggestions as you type.
+
+3. Spell Checkers and Dictionaries
+   Dictionary words are stored in a Trie. Checking if a word is valid is a single
+   root-to-leaf traversal in O(L). Generating suggestions for misspellings uses
+   fuzzy Trie traversal with edit distance, visiting only relevant branches rather
+   than the entire dictionary.
+
+4. IP Routing Tables (Longest Prefix Match)
+   Routers use a binary Trie over IP address bits to perform longest prefix match —
+   finding the most specific routing rule for a destination IP. Each bit of the IP
+   address is a branch (0 or 1). This is the foundation of how packets are forwarded
+   across the internet at hardware speed, used in protocols like BGP and OSPF.
+
+5. T9 / Predictive Text Input
+   Old mobile phones mapped multiple letters to each digit key. A Trie stores the
+   dictionary, and as you press digit sequences, it walks branches corresponding to
+   all letter combinations for each digit, returning words that match the sequence.
+   This is essentially a constrained prefix search on a Trie.
+
+6. Contact / Phone Book Search
+   Mobile operating systems index contact names in a Trie so that typing partial
+   names instantly narrows results. The same approach is used in email clients for
+   address book lookup and in any application with a "search as you type" feature
+   over a fixed dataset.
+
+7. DNA Sequence Matching (Bioinformatics)
+   DNA strings over a 4-character alphabet {A, C, G, T} are indexed in Tries (or
+   compressed suffix tries) to find all occurrences of a gene subsequence within a
+   genome. Tools like BLAST use Trie-based indexing to match short query sequences
+   against massive reference genomes without scanning every position linearly.
+
+8. Word Games and Boggle Solvers
+   Solving Boggle (find all valid words on a letter grid) is done by performing a
+   DFS on the grid while simultaneously walking a Trie. If the current path prefix
+   does not exist in the Trie, the DFS prunes that entire branch immediately — no
+   need to check every possible continuation against the dictionary.
+
+
+The Core Problem Trie Solves
+------------------------------
+Fast prefix-based string operations — lookup, insertion, and retrieval of all
+strings sharing a common prefix — in time proportional only to the string length,
+not the size of the dataset.
+
+Hash map approach: exact lookup in O(L), but no prefix queries — you must scan
+all keys to find matches. Sorted array approach: binary search in O(L * log N),
+prefix scan possible but slow to build and update.
+
+Trie approach: insert, lookup, and prefix search all in O(L). The shared-prefix
+structure is the dictionary itself — no extra index needed. For any application
+where "what words start with X?" is a core operation, a Trie is the natural fit.
