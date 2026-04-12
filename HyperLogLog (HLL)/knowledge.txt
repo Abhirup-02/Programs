@@ -1,0 +1,123 @@
+HYPERLOGLOG (HLL)
+=================
+
+What is HyperLogLog?
+--------------------
+HyperLogLog is a probabilistic data structure used to estimate the cardinality
+(number of distinct elements) of a very large dataset. It does NOT store the
+elements themselves — it only tracks enough information to make a statistical
+estimate of how many unique items it has seen.
+
+The trade-off: it uses a tiny, fixed amount of memory (typically ~1.5 KB) and
+can estimate the count of billions of distinct elements with an error rate of
+around 0.81%. Exact counting would require memory proportional to the number
+of unique items (O(n)); HyperLogLog uses O(1) — constant memory regardless of
+input size.
+
+It was formally described by Philippe Flajolet et al. in 2007, building on
+earlier work called LogLog and probabilistic counting.
+
+
+How It Works
+------------
+The core intuition: if you hash every element and look at the binary representation
+of the hash, the probability of seeing a hash starting with k leading zeros is 1/2^k.
+So if the maximum number of leading zeros you've observed is k, you've probably
+seen around 2^k distinct elements.
+
+  Step 1 — Hash the element:
+    h = hash(element)  →  produces a uniform random-looking bit string
+
+  Step 2 — Split the hash:
+    Use the first b bits to choose one of m = 2^b registers (buckets).
+    Use the remaining bits to count leading zeros.
+
+  Step 3 — Update the register:
+    For the chosen register, store the maximum leading-zero count seen so far.
+
+  Step 4 — Estimate cardinality:
+    Apply the harmonic mean across all m registers, then multiply by a
+    bias-correction constant alpha:
+
+      estimate = alpha * m^2 * (sum of 2^(-register[i]))^(-1)
+
+    Small-range and large-range corrections are applied to reduce error at extremes.
+
+Example with 4 registers (b=2, m=4):
+
+  hash("apple")  = 10|01001...  → register[2], leading zeros in rest = 0
+  hash("banana") = 01|00011...  → register[1], leading zeros in rest = 3
+  hash("cherry") = 10|00101...  → register[2], leading zeros in rest = 2
+  hash("apple")  = 10|01001...  → register[2], already 2 — no update (duplicate!)
+
+  registers = [0, 3, 2, 0]
+
+  estimate ≈ alpha * 16 * harmonic_mean(2^0, 2^3, 2^2, 2^0)^(-1)
+           ≈ ~3 distinct elements  (actual: 3)
+
+Key properties:
+  - Memory:    O(1) — fixed number of registers, each a few bits wide
+  - Add:       O(1) per element
+  - Estimate:  O(m) — linear in number of registers, independent of input size
+  - Error:     ~0.81% / sqrt(m) standard error
+  - Mergeable: two HLL sketches can be merged by taking the max of each register
+
+
+Real-World Use Cases
+--------------------
+
+1. Redis PFCOUNT / PFADD
+   Redis ships HyperLogLog natively. Engineers use it to count unique visitors,
+   unique search queries, or unique events per day — in constant memory.
+   Counting 100 million unique IP addresses exactly needs ~1.6 GB; HLL needs ~12 KB.
+   The command PFCOUNT returns the estimated cardinality in O(1).
+
+2. Web Analytics (Unique Visitor Counting)
+   Google Analytics, Adobe Analytics, and similar platforms need to count unique
+   users across billions of pageviews per day. Storing every user ID and deduplicating
+   is expensive. HLL gives a close-enough answer (< 1% error) at a fraction of the cost,
+   enabling real-time dashboards without massive storage infrastructure.
+
+3. Network Traffic Analysis
+   Network routers and monitoring systems (e.g., Cisco, Juniper) use HLL to count
+   distinct source IPs, destination ports, or flows seen per second. This helps
+   detect anomalies like DDoS attacks or port scans. Exact counting at line speed
+   (millions of packets/sec) is infeasible; HLL runs in hardware-friendly constant space.
+
+4. Database Query Optimization (PostgreSQL, Presto, BigQuery)
+   Query planners need to estimate how many distinct values a column has to choose
+   efficient join strategies and index usage. PostgreSQL's ANALYZE uses HLL-based
+   statistics internally. BigQuery and Presto expose APPROX_COUNT_DISTINCT() which
+   is backed by HLL, running orders of magnitude faster than COUNT(DISTINCT ...).
+
+5. Stream Processing (Apache Flink, Spark Streaming, Kafka Streams)
+   In real-time pipelines, computing exact distinct counts over an unbounded stream
+   requires keeping all seen values in memory — impossible for high-volume streams.
+   HLL sketches are updated per event and periodically flushed, enabling distinct
+   counts over sliding windows with bounded memory.
+
+6. Ad Tech — Reach and Frequency
+   Advertising platforms (Meta, The Trade Desk, Google Ads) need to estimate how
+   many unique users saw a campaign across many publishers and devices. Each publisher
+   sends an HLL sketch of their user set. The buyer merges sketches and estimates
+   total unique reach without any raw user IDs being shared — preserving privacy.
+
+7. Cybersecurity — DNS and Log Anomaly Detection
+   Security tools count distinct domains queried, distinct endpoints contacted, or
+   distinct failed login sources per time window. HLL allows these counts to be
+   maintained across billions of log lines per day on modest hardware, flagging
+   unusual cardinality spikes that signal data exfiltration or scanning activity.
+
+
+The Core Problem HyperLogLog Solves
+-------------------------------------
+Counting distinct elements in a massive or infinite stream of data using constant
+memory, when exact counting is too expensive or simply impossible.
+
+Exact approach: store every unique element in a hash set, count the size. O(n) memory.
+HyperLogLog approach: hash elements into registers, track maximum leading zeros.
+O(1) memory, ~0.81% error — good enough for almost every real-world cardinality problem.
+
+The insight is that perfect accuracy is rarely required. Knowing you had
+"approximately 4.2 million unique visitors today" is just as actionable as knowing
+the exact number, and HLL delivers that answer in kilobytes instead of gigabytes.
