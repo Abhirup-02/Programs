@@ -1,0 +1,104 @@
+MERKLE TREE
+===========
+
+What is a Merkle Tree?
+----------------------
+A Merkle Tree (also called a Hash Tree) is a binary tree data structure where every
+leaf node contains the cryptographic hash of a data block, and every non-leaf node
+contains the hash of its two child nodes. This continues up the tree until a single
+root hash is produced — called the Merkle Root.
+
+The key property: changing any single piece of data anywhere in the tree changes
+the root hash. This makes it possible to verify the integrity of large datasets
+efficiently without comparing everything from scratch.
+
+
+How It Works
+------------
+Given a set of data blocks D1, D2, D3, D4:
+
+  Step 1 — Hash each block:
+    H1 = hash(D1)
+    H2 = hash(D2)
+    H3 = hash(D3)
+    H4 = hash(D4)
+
+  Step 2 — Hash pairs of children:
+    H12 = hash(H1 + H2)
+    H34 = hash(H3 + H4)
+
+  Step 3 — Hash up to the root:
+    Root = hash(H12 + H34)
+
+          [Root]
+         /      \
+      [H12]    [H34]
+      /   \    /   \
+    [H1] [H2] [H3] [H4]
+     |    |    |    |
+     D1   D2   D3   D4
+
+To verify that D2 is valid, you only need: H1, H34, and the Root.
+You do NOT need D1, D3, or D4 — just their hashes along the path.
+This is called a Merkle Proof.
+
+Complexity:
+  - Building the tree:   O(n)
+  - Verifying one item:  O(log n)  — only the sibling hashes along the path to root
+
+
+Real-World Use Cases
+--------------------
+
+1. Bitcoin and Blockchain
+   Every Bitcoin block stores thousands of transactions. A Merkle Tree is built
+   over all transactions, and only the Merkle Root is stored in the block header.
+   A lightweight wallet (SPV client) can verify a single transaction is included
+   in a block by downloading only ~log2(n) hashes — not the entire block.
+   Without Merkle Trees, a phone wallet would need to download gigabytes of data.
+
+2. Git Version Control
+   Git uses a Merkle-like DAG (Directed Acyclic Graph) where every commit object
+   hashes the tree of files, and every tree object hashes its blobs and subtrees.
+   This guarantees that if any file anywhere in history is tampered with, every
+   commit hash that descends from it will change — making history tamper-evident.
+
+3. Certificate Transparency (CT Logs)
+   Browser security relies on certificate authorities (CAs) issuing SSL certificates.
+   CT logs use Merkle Trees to publicly record every certificate ever issued.
+   Anyone can cryptographically prove a certificate is (or is not) in the log
+   without downloading millions of entries.
+
+4. Peer-to-Peer File Sharing (BitTorrent)
+   When downloading a large file in chunks from many peers, you need to verify
+   each chunk is correct without having the full file. A Merkle Tree of chunk
+   hashes is distributed with the torrent. Each downloaded chunk can be verified
+   independently in O(log n) time against the trusted root hash.
+
+5. Database Replication and Sync (Apache Cassandra, DynamoDB)
+   Distributed databases use Merkle Trees to efficiently detect which parts of
+   two replicas are out of sync. Instead of comparing every row, nodes compare
+   subtree hashes — only descending into subtrees where hashes differ. This
+   reduces the data transferred during anti-entropy repair from O(n) to O(differences).
+
+6. IPFS (InterPlanetary File System)
+   Files are split into chunks, each chunk is hashed, and a Merkle DAG links
+   them. The root hash is the content address (CID) of the file. If any byte
+   of the file changes, the CID changes — guaranteeing content integrity across
+   a distributed network with no central authority.
+
+7. Software Package Managers (npm, apt, cargo)
+   Package registries publish Merkle-based integrity proofs so clients can
+   verify a downloaded package matches what was published, detecting any
+   tampering between the registry and the user's machine.
+
+
+The Core Problem Merkle Trees Solve
+-------------------------------------
+Efficiently proving that a specific piece of data belongs to (or has not been
+tampered with in) a large dataset — without trusting the source or transferring
+the entire dataset.
+
+Traditional approach: download everything, hash it all, compare. O(n) bandwidth.
+Merkle approach: share only the root hash via a trusted channel, then verify
+any individual item with O(log n) hashes. Scales to millions of entries.
